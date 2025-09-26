@@ -1,0 +1,10 @@
+# Replace with the actual workflow content I generated earlier
+name: CI/CD Pipeline for Agentic Cloud Orchestrator
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build_and_push:
+    # ...
