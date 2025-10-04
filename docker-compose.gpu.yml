@@ -1,0 +1,89 @@
+version: "3.9"
+
+services:
+  uaco:
+    image: ghcr.io/faricjh59/uaco:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      USE_TRITON: "true"
+      PROMETHEUS_PUSHGATEWAY: "http://pushgateway:9091"
+      AWS_REGION: "${AWS_REGION:-us-east-1}"
+    volumes:
+      - ./models:/models:ro
+      - ./src:/app/src
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    ports:
+      - "8000:8000"
+    depends_on:
+      - triton
+      - prometheus
+      - pushgateway
+    networks:
+      - uaco-network
+
+  triton:
+    image: nvcr.io/nvidia/tritonserver:23.12-py3
+    command: [
+      "tritonserver",
+      "--model-repository=/models",
+      "--allow-grpc=true",
+      "--allow-http=true",
+      "--metrics-port=8002"
+    ]
+    shm_size: 1g
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - capabilities: ["gpu"]
+    volumes:
+      - ./models:/models:ro
+    ports:
+      - "8001:8001"
+      - "8002:8002"
+    networks:
+      - uaco-network
+
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command: ["--config.file=/etc/prometheus/prometheus.yml","--storage.tsdb.retention.time=15d"]
+    ports:
+      - "9090:9090"
+    networks:
+      - uaco-network
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    ports:
+      - "9091:9091"
+    networks:
+      - uaco-network
+
+  grafana:
+    image: grafana/grafana:latest
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: "admin"
+    volumes:
+      - ./dashboards:/var/lib/grafana/dashboards
+    ports:
+      - "3000:3000"
+    networks:
+      - uaco-network
+
+  chaos:
+    image: alpine:latest
+    command: ["sh","-c","while true; do echo 'chaos event simulated'; sleep 60; done"]
+    networks:
+      - uaco-network
+
+networks:
+  uaco-network:
+    driver: bridge
